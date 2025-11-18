@@ -269,7 +269,7 @@ int CudaRasterizer::Rasterizer::forward(
 
 	// Let each tile blend its range of Gaussians independently in parallel
 	const float* feature_ptr = colors != nullptr ? colors : geomState.rgb;
-	CHECK_CUDA(FORWARD::render(
+	CHECK_CUDA(FORWARD::render(negatives,
 		tile_grid, block,
 		imgState.ranges,
 		binningState.point_list,
@@ -305,6 +305,8 @@ void CudaRasterizer::Rasterizer::backward(
 	float* dL_dopacity,
 	float* dL_dcolor,
 	float* dL_dconic,
+	float* dL_dscale,
+	float* dL_drot,
 	float* dL_dnegative,
 	bool antialiasing,
 	bool debug)
@@ -326,23 +328,29 @@ void CudaRasterizer::Rasterizer::backward(
 	// opacity and RGB of Gaussians from per-pixel loss gradients.
 	// If we were given precomputed colors and not SHs, use them.
 	const float* color_ptr = (colors != nullptr) ? colors : geomState.rgb;
-	CHECK_CUDA(BACKWARD::render(
-		tile_grid,
-		block,
-		imgState.ranges,
-		binningState.point_list,
-		width, height,
-		background,
-		geomState.means2D,
-		geomState.conic_opacity,
-		color_ptr,
-		imgState.accum_alpha,
-		imgState.n_contrib,
-		dL_dpix,
-		(float2*)dL_dmean2D,
-		(float3*)dL_dconic,
-		dL_dopacity,
-		dL_dcolor), debug);
-
-
+	CHECK_CUDA(BACKWARD::render(negetives, dL_dnegative,
+								tile_grid,
+								block,
+								imgState.ranges,
+								binningState.point_list,
+								width, height,
+								background,
+								geomState.means2D,
+								geomState.conic_opacity,
+								color_ptr,
+								imgState.accum_alpha,
+								imgState.n_contrib,
+								dL_dpix,
+								(float2 *)dL_dmean2D,
+								(float3 *)dL_dconic,
+								dL_dopacity,
+								dL_dcolor),
+			   debug);
+	CHECK_CUDA(BACKWARD::cov2d(P,
+							   (float2 *)scales,
+							   (float *)rots,
+							   (float3 *)dL_dconic,
+							   (float2 *)dL_dscale,
+							   dL_drot),
+			   debug);
 }

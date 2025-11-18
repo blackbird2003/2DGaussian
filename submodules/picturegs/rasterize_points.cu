@@ -79,12 +79,12 @@ RasterizeGaussiansCUDA(
 	    P,
 		background.contiguous().data<float>(),
 		W, H,
-		means2D.contiguous().data<float>(),
-		colors.contiguous().data<float>(),
-		opacity.contiguous().data<float>(),
+		means2D.contiguous().data_ptr<float>(),
+		colors.contiguous().data_ptr<float>(),
+		opacity.contiguous().data_ptr<float>(),
 		scales.contiguous().data_ptr<float>(),
 		rots.contiguous().data_ptr<float>(),
-		negative.contiguous().data_pttr<float>(),
+		negative.contiguous().data_ptr<float>(),
 		prefiltered,
 		out_color.contiguous().data<float>(),
 		antialiasing,
@@ -116,7 +116,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
   const int H = dL_dout_color.size(1);
   const int W = dL_dout_color.size(2);
 
-
+  torch::Tensor dL_dconic = torch::zeros({P, 3}, means2D.options());
   torch::Tensor dL_dmeans2D = torch::zeros({P, 2}, means2D.options());
   torch::Tensor dL_dcolors = torch::zeros({P, NUM_CHANNELS}, means2D.options());
   torch::Tensor dL_dscales = torch::zeros({P, 2}, means2D.options());
@@ -134,9 +134,9 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  W, H,
 	  colors.contiguous().data<float>(),
 	  opacities.contiguous().data<float>(),
-	  scales.data_ptr<float>(),
-	  rots.data_ptr<float>(),
-	  negative.data_ptr<float>(),
+	  scales.contiguous().data_ptr<float>(),
+	  rots.contiguous().data_ptr<float>(),
+	  negative.contiguous().data_ptr<float>(),
 	  radii.contiguous().data<int>(),
 	  reinterpret_cast<char*>(geomBuffer.contiguous().data_ptr()),
 	  reinterpret_cast<char*>(binningBuffer.contiguous().data_ptr()),
@@ -145,9 +145,10 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Te
 	  dL_dmeans2D.contiguous().data<float>(),
 	  dL_dopacity.contiguous().data<float>(),
 	  dL_dcolors.contiguous().data<float>(),
-	  dL_dscales.contiguous().data<float>(),
-	  dL_drots.contiguous().data<float>(),
-	  dL_dnega.contiguous().data<float>,
+	  dL_dconic.contiguous().data<float>(),
+	  dL_dscales.contiguous().data_ptr<float>(),
+	  dL_drots.contiguous().data_ptr<float>(),
+	  dL_dnega.contiguous().data_ptr<float>(),
 	  antialiasing,
 	  debug);
   }

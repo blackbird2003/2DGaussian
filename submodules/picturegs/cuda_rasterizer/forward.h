@@ -38,7 +38,7 @@ namespace FORWARD
 		bool antialiasing);
 
 	// Main rasterization method.
-	void render(
+	void render(const float* negative,
 		const dim3 grid, dim3 block,
 		const uint2* ranges,
 		const uint32_t* point_list,

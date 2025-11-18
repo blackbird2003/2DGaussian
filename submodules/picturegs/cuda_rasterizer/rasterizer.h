@@ -58,7 +58,9 @@ namespace CudaRasterizer
 			float* dL_dmean2D,
 			float* dL_dopacity,
 			float* dL_dcolor,
-			float* dL_dcov,
+			float* dL_dconic,
+			float* dL_dscale,
+			float* dL_drot,
 			float* dL_dnegative,
 			bool antialiasing,
 			bool debug);

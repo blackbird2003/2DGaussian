@@ -62,17 +62,19 @@ __global__ void preprocessCUDA(int P,
 	radii[idx] = 0;
 	tiles_touched[idx] = 0;
 
-	const float* conic;
 	computeCov2D(scales[idx], rots[idx], cov2Ds + idx * 3);
-	conic = cov2Ds + idx * 3;
+	cov2Ds = cov2Ds + idx * 3;
+	float3 cov = { cov2Ds[0], cov2Ds[1],cov2Ds[2]};
+	const float det_cov = cov.x * cov.z - cov.y * cov.y;
+	const float det = det_cov;
 
-	const float det_conic = conic[idx].x * conic[idx].z - conic[idx].y * conic[idx].y;
-	if (det_conic == 0.0f)
+	if (det_cov == 0.0f)
 	return;
-	const float det_inv = 1.f / det_conic;
-	float3 cov = { conic[idx].z * det_inv, -conic[idx].y * det_inv, conic[idx].x * det_inv };
+	float det_inv = 1.f / det;
 
-	const float det = cov.x * cov.z - cov.y * cov.y;
+	float3 conic = { cov.z * det_inv, -cov.y * det_inv, cov.x * det_inv };
+
+
 	float h_convolution_scaling = 1.0f;
 
 
@@ -102,7 +104,7 @@ __global__ void preprocessCUDA(int P,
 	// Inverse 2D covariance and opacity neatly pack into one float4
 	float opacity = opacities[idx];
 
-	conic_opacity[idx] = { conic[idx].x, conic[idx].y, conic[idx].z, opacity * h_convolution_scaling };
+	conic_opacity[idx] ={ conic.x, conic.y, conic.z, opacity * h_convolution_scaling };
 
 	tiles_touched[idx] = (rect_max.y - rect_min.y) * (rect_max.x - rect_min.x);
 }
@@ -112,7 +114,7 @@ __global__ void preprocessCUDA(int P,
 // and rasterizing data.
 template <uint32_t CHANNELS>
 __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
-renderCUDA(
+renderCUDA(const float* negative,
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
 	int W, int H,
@@ -193,7 +195,7 @@ renderCUDA(
 			// Obtain alpha by multiplying with Gaussian opacity
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix).
-			float alpha = min(0.99f, con_o.w * exp(power));
+			float alpha = min(0.99f, con_o.w * exp(power))*negative[collected_id[j]];
 			if (alpha < 1.0f / 255.0f)
 				continue;
 
@@ -223,7 +225,7 @@ renderCUDA(
 	}
 }
 
-void FORWARD::render(
+void FORWARD::render(const float* negative,
 	const dim3 grid, dim3 block,
 	const uint2* ranges,
 	const uint32_t* point_list,
@@ -236,7 +238,7 @@ void FORWARD::render(
 	const float* bg_color,
 	float* out_color)
 {
-	renderCUDA<NUM_CHANNELS> << <grid, block >> > (
+	renderCUDA<NUM_CHANNELS> << <grid, block >> > (negative,
 		ranges,
 		point_list,
 		W, H,

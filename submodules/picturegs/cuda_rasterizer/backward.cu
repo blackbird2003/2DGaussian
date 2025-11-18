@@ -23,7 +23,7 @@ __device__ __forceinline__ float sq(float x) { return x * x; }
 // Backward version of the rendering procedure.
 template <uint32_t C>
 __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
-renderCUDA(
+renderCUDA(const float* negative,float* dL_dnegative,
 	const uint2* __restrict__ ranges,
 	const uint32_t* __restrict__ point_list,
 	int W, int H,
@@ -178,7 +178,7 @@ renderCUDA(
 
 
 
-void BACKWARD::render(
+void BACKWARD::render(const float* negative,float* dL_dnegative,
 	const dim3 grid, const dim3 block,
 	const uint2* ranges,
 	const uint32_t* point_list,
@@ -195,7 +195,7 @@ void BACKWARD::render(
 	float* dL_dopacity,
 	float* dL_dcolors)
 {
-	renderCUDA<NUM_CHANNELS> << <grid, block >> >(
+	renderCUDA<NUM_CHANNELS> << <grid, block >> >(negative,dL_dnegative,
 		ranges,
 		point_list,
 		W, H,
@@ -212,3 +212,44 @@ void BACKWARD::render(
 		dL_dcolors
 		);
 }
+template <int C>
+__global__ void cov2dc(
+	const int P,
+	float2 *scales,
+	float *rots,
+	float3 *dL_dconic2D,
+	float2 *dL_dscale,
+	float *dL_drot)
+{
+	auto idx = cg::this_grid().thread_rank();
+	if (idx >= P)
+		return;
+	float3 d = dL_dconic2D[idx];
+	float theat = rots[idx];
+	float x = scales[idx].x;
+	float y = scales[idx].y;
+
+	atomicAdd(&dL_dscale[idx].x, -(2 * pow(sin(theat), 2)) * (d.z) / pow(x, 3));
+	atomicAdd(&dL_dscale[idx].x, -(2 * sin(theat) * cos(theat)) * (d.y) / pow(x, 3));
+	atomicAdd(&dL_drot[idx], ((pow(x, 2) - pow(y, 2)) * 2 * sin(theat) * cos(theat)) * (d.x) / (pow(x, 2) * pow(y, 2)));
+	atomicAdd(&dL_drot[idx], -(2 * pow(sin(theat), 2)) * (d.z) / pow(x, 3));
+	atomicAdd(&dL_drot[idx], ((-pow(x, 2) + pow(y, 2)) * 2 * sin(theat) * cos(theat)) * (d.z) / (pow(x, 2) * pow(y, 2)));
+	atomicAdd(&dL_dscale[idx].y, -(2 * pow(cos(theat), 2)) * (d.x) / pow(y, 3));
+	atomicAdd(&dL_dscale[idx].y, -(2 * pow(sin(theat), 2)) * (d.z) / pow(y, 3));
+	atomicAdd(&dL_dscale[idx].y, (2 * sin(theat) * cos(theat)) * (d.y) / pow(y, 3));
+}
+void BACKWARD::cov2d(const int P,
+					 float2 *scales,
+					 float *rots,
+					 float3 *dL_dconic2D,
+					 float2 *dL_dscale,
+					 float *dL_drot)
+{
+	cov2dc<NUM_CHANNELS><<<(P + 255) / 256, 256>>>(
+		P,
+		scales,
+		rots,
+		dL_dconic2D,
+		dL_dscale,
+		dL_drot);
+};

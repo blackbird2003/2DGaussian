@@ -24,7 +24,8 @@ def rasterize_gaussians(
     opacities,
     scales,
     rots,
-    raster_settings,
+    negative,
+    raster_settings
 ):
     return _RasterizeGaussians.apply(
         means2D,
@@ -32,7 +33,8 @@ def rasterize_gaussians(
         opacities,
         scales,
         rots,
-        raster_settings,
+        negative,
+        raster_settings
     )
 
 class _RasterizeGaussians(torch.autograd.Function):
@@ -44,6 +46,7 @@ class _RasterizeGaussians(torch.autograd.Function):
         opacities,
         scales,
         rots,
+        negative,
         raster_settings,
     ):
 
@@ -55,11 +58,12 @@ class _RasterizeGaussians(torch.autograd.Function):
             opacities,
             scales,
             rots,
+            negative,
             raster_settings.image_height,
             raster_settings.image_width,
             raster_settings.prefiltered,
             raster_settings.antialiasing,
-            raster_settings.debug
+            raster_settings.debug,
         )
 
         # Invoke C++/CUDA rasterizer
@@ -68,7 +72,7 @@ class _RasterizeGaussians(torch.autograd.Function):
         # Keep relevant tensors for backward
         ctx.raster_settings = raster_settings
         ctx.num_rendered = num_rendered
-        ctx.save_for_backward(colors, means2D, scales, rots, radii, opacities, geomBuffer, binningBuffer, imgBuffer)
+        ctx.save_for_backward(colors, means2D, scales, rots, radii, opacities, geomBuffer, binningBuffer, imgBuffer,negative)
         return color, radii
 
     @staticmethod
@@ -77,7 +81,7 @@ class _RasterizeGaussians(torch.autograd.Function):
         # Restore necessary values from context
         num_rendered = ctx.num_rendered
         raster_settings = ctx.raster_settings
-        colors, means2D, scales, rots, radii, opacities, geomBuffer, binningBuffer, imgBuffer = ctx.saved_tensors
+        colors, means2D, scales, rots, radii, opacities, geomBuffer, binningBuffer, imgBuffer ,negative= ctx.saved_tensors
 
         # Restructure args as C++ method expects them
         args = (raster_settings.bg,
@@ -87,6 +91,7 @@ class _RasterizeGaussians(torch.autograd.Function):
                 opacities,
                 scales,
                 rots,
+                negative,
                 grad_out_color,
                 geomBuffer,
                 num_rendered,
@@ -122,7 +127,7 @@ class GaussianRasterizer(nn.Module):
         super().__init__()
         self.raster_settings = raster_settings
 
-    def forward(self,  means2D, opacities,  colors = None, scale=None, rots=None):
+    def forward(self,  means2D, opacities,  colors = None, scale=None, rots=None,negative=None):
         raster_settings = self.raster_settings
         # Invoke C++/CUDA rasterization routine
         return rasterize_gaussians(
@@ -131,6 +136,7 @@ class GaussianRasterizer(nn.Module):
             opacities,
             scale,
             rots,
+            negative,
             raster_settings,
         )
 

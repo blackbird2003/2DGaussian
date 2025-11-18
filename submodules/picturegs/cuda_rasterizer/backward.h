@@ -20,7 +20,7 @@
 
 namespace BACKWARD
 {
-	void render(
+	void render(const float* negative,float* dL_dnegative,
 		const dim3 grid, dim3 block,
 		const uint2* ranges,
 		const uint32_t* point_list,
@@ -37,6 +37,12 @@ namespace BACKWARD
 		float* dL_dopacity,
 		float* dL_dcolors);
 
+	void cov2d(const int P,
+			   float2 *scales,
+			   float *rots,
+			   float3 *dL_dconic2D,
+			   float2 *dL_dscale,
+			   float *dL_drot);
 
 }
 
