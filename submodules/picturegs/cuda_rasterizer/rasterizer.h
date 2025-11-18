@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -26,13 +26,15 @@ namespace CudaRasterizer
 			std::function<char* (size_t)> geometryBuffer,
 			std::function<char* (size_t)> binningBuffer,
 			std::function<char* (size_t)> imageBuffer,
-			const int P, 
+			const int P,
 			const float* background,
 			const int width, int height,
 			const float* means2D,
 			const float* colors,
 			const float* opacities,
-			const float* conic,
+			const float* scales,
+			const float* rots,
+			const float* negative,
 			const bool prefiltered,
 			float* out_color,
 			bool antialiasing,
@@ -45,7 +47,9 @@ namespace CudaRasterizer
 			const int width, int height,
 			const float* colors,
 			const float* opacities,
-			const float* conic,
+			const float* scalse,
+			const float* rots,
+			const float* negative,
 			const int* radii,
 			char* geom_buffer,
 			char* binning_buffer,
@@ -54,7 +58,8 @@ namespace CudaRasterizer
 			float* dL_dmean2D,
 			float* dL_dopacity,
 			float* dL_dcolor,
-			float* dL_dconic,
+			float* dL_dcov,
+			float* dL_dnegative,
 			bool antialiasing,
 			bool debug);
 	};

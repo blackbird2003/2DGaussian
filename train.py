@@ -24,6 +24,8 @@ from os import makedirs
 import torchvision.transforms.functional as tf
 from argparse import ArgumentParser, Namespace
 
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint):
     first_iter = 0
@@ -43,8 +45,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
 
-    gt_image = scene.getImages().to("cuda")
+    gt_image = scene.getImages().cuda()
     resoulation = (gt_image.shape[1], gt_image.shape[2])
+    # image = torch.ones_like(gt_image)
 
     for iteration in range(first_iter, opt.iterations + 1):
         iter_start.record()
@@ -53,10 +56,12 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if iteration % 1000 == 0:
             torch.cuda.empty_cache()
 
-        render_pkg = render(primitives, opt, background, resoulation)
+        # render_pkg = render(primitives, opt, background, resoulation)
 
-        image = render_pkg["render"]
-        torchvision.utils.save_image(image, os.path.join(args.model_path, 'test' + ".png"))
+        # image = render_pkg["render"]
+        image = torch.ones_like(gt_image)
+        # print(image)
+        # torchvision.utils.save_image(image, os.path.join(args.model_path, 'test' + ".png"))
 
         Ll1 = l1_loss(image, gt_image)
 

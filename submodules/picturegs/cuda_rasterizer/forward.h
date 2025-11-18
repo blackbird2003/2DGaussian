@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -22,11 +22,14 @@ namespace FORWARD
 {
 	// Perform initial steps for each Gaussian prior to rasterization.
 	void preprocess(int P, const float* means2D,
-		const glm::vec3* conic,
+		const glm::vec2* scales,
+		const float* rots,
+		const float* negatives,
 		const float* opacities,
 		const float* colors,
 		const int W, int H,
 		int* radii,
+		float* cov2D,
 		float2* points_xy_image,
 		float4* conic_opacity,
 		const dim3 grid,

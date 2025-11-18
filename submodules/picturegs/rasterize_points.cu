@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -38,14 +38,16 @@ RasterizeGaussiansCUDA(
 	const torch::Tensor& means2D,
     const torch::Tensor& colors,
     const torch::Tensor& opacity,
-	const torch::Tensor& conic,
+	const torch::Tensor& scales,
+	const torch::Tensor& rots,
+	const torch::Tensor& negative,
     const int image_height,
     const int image_width,
 	const bool prefiltered,
 	const bool antialiasing,
 	const bool debug)
 {
-  
+
   const int P = means2D.size(0);
   const int H = image_height;
   const int W = image_width;
@@ -56,7 +58,7 @@ RasterizeGaussiansCUDA(
   torch::Tensor out_color = torch::full({NUM_CHANNELS, H, W}, 0.0, float_opts);
 
   torch::Tensor radii = torch::full({P}, 0, means2D.options().dtype(torch::kInt32));
-  
+
   torch::Device device(torch::kCUDA);
   torch::TensorOptions options(torch::kByte);
   torch::Tensor geomBuffer = torch::empty({0}, options.device(device));
@@ -65,7 +67,7 @@ RasterizeGaussiansCUDA(
   std::function<char*(size_t)> geomFunc = resizeFunctional(geomBuffer);
   std::function<char*(size_t)> binningFunc = resizeFunctional(binningBuffer);
   std::function<char*(size_t)> imgFunc = resizeFunctional(imgBuffer);
-  
+
   int rendered = 0;
   if(P != 0)
   {
@@ -74,13 +76,15 @@ RasterizeGaussiansCUDA(
 	    geomFunc,
 		binningFunc,
 		imgFunc,
-	    P, 
+	    P,
 		background.contiguous().data<float>(),
 		W, H,
 		means2D.contiguous().data<float>(),
-		colors.contiguous().data<float>(), 
-		opacity.contiguous().data<float>(), 
-		conic.contiguous().data_ptr<float>(),
+		colors.contiguous().data<float>(),
+		opacity.contiguous().data<float>(),
+		scales.contiguous().data_ptr<float>(),
+		rots.contiguous().data_ptr<float>(),
+		negative.contiguous().data_pttr<float>(),
 		prefiltered,
 		out_color.contiguous().data<float>(),
 		antialiasing,
@@ -90,14 +94,16 @@ RasterizeGaussiansCUDA(
   return std::make_tuple(rendered, out_color, radii, geomBuffer, binningBuffer, imgBuffer);
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
  RasterizeGaussiansBackwardCUDA(
  	const torch::Tensor& background,
 	const torch::Tensor& means2D,
 	const torch::Tensor& radii,
     const torch::Tensor& colors,
 	const torch::Tensor& opacities,
-	const torch::Tensor& conic,
+	const torch::Tensor& scales,
+	const torch::Tensor& rots,
+	const torch::Tensor& negative,
     const torch::Tensor& dL_dout_color,
 	const torch::Tensor& geomBuffer,
 	const int R,
@@ -109,24 +115,28 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
   const int P = means2D.size(0);
   const int H = dL_dout_color.size(1);
   const int W = dL_dout_color.size(2);
-  
+
 
   torch::Tensor dL_dmeans2D = torch::zeros({P, 2}, means2D.options());
   torch::Tensor dL_dcolors = torch::zeros({P, NUM_CHANNELS}, means2D.options());
-  torch::Tensor dL_dconic = torch::zeros({P, 3}, means2D.options());
+  torch::Tensor dL_dscales = torch::zeros({P, 2}, means2D.options());
+  torch::Tensor dL_drots = torch::zeros({P, 1}, means2D.options());
+  torch::Tensor dL_dnega = torch::zeros({P, 1}, means2D.options());
   torch::Tensor dL_dopacity = torch::zeros({P, 1}, means2D.options());
 
 
 
 
   if(P != 0)
-  {  
+  {
 	  CudaRasterizer::Rasterizer::backward(P, R,
 	  background.contiguous().data<float>(),
-	  W, H, 
+	  W, H,
 	  colors.contiguous().data<float>(),
 	  opacities.contiguous().data<float>(),
-	  conic.data_ptr<float>(),
+	  scales.data_ptr<float>(),
+	  rots.data_ptr<float>(),
+	  negative.data_ptr<float>(),
 	  radii.contiguous().data<int>(),
 	  reinterpret_cast<char*>(geomBuffer.contiguous().data_ptr()),
 	  reinterpret_cast<char*>(binningBuffer.contiguous().data_ptr()),
@@ -135,11 +145,13 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
 	  dL_dmeans2D.contiguous().data<float>(),
 	  dL_dopacity.contiguous().data<float>(),
 	  dL_dcolors.contiguous().data<float>(),
-	  dL_dconic.contiguous().data<float>(),
+	  dL_dscales.contiguous().data<float>(),
+	  dL_drots.contiguous().data<float>(),
+	  dL_dnega.contiguous().data<float>,
 	  antialiasing,
 	  debug);
   }
 
-  return std::make_tuple(dL_dmeans2D, dL_dcolors, dL_dopacity, dL_dconic);
+  return std::make_tuple(dL_dmeans2D, dL_dcolors, dL_dopacity, dL_dscales, dL_drots, dL_dnega);
 }
 

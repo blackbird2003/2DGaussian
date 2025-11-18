@@ -28,6 +28,11 @@ def render(pc : Model, opt : OptimizationParams, background, resoulation):
 
     cov_inv = pc.get_cov_inv()
 
+    # print("xy shape:", means2D.shape)
+    # print("color shape::", rgb.shape)
+    # print("opa shape:", opacity.shape)
+    # print("cov shape:", cov_inv.shape)
+
     render_img, radii = rasterizer(
         means2D=means2D,
         colors=rgb,
@@ -35,7 +40,8 @@ def render(pc : Model, opt : OptimizationParams, background, resoulation):
         conic=cov_inv
     )
 
-    # render_img = render_img.clamp(0, 1)
-    print(render_img.device)
+    # print(render_img.device)
+    # print(render_img.shape)
+    render_img = render_img.clamp(0, 1)
 
     return {"render" : render_img}

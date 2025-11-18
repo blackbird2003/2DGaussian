@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -16,14 +16,36 @@
 namespace cg = cooperative_groups;
 
 
+__device__ void computeCov2D(const glm::vec2 scale, const float rot, float* cov2D)
+{
+	glm::mat2 S = glm::mat2(2.0f);
+	S[0][0] = scale.x;
+	S[1][1] = scale.y;
+
+	glm::mat2 R = glm::mat2(
+		glm::cos(rot), -1.0f * glm::sin(rot),
+		glm::sin(rot), glm::cos(rot)
+	);
+
+	glm::mat2 M = S * R;
+	glm::mat3 Sigma = glm::transpose(M) * M;
+
+	cov2D[0] = Sigma[0][0];
+	cov2D[1] = Sigma[0][1];
+	cov2D[2] = Sigma[1][1];
+}
+
 template<int C>
 __global__ void preprocessCUDA(int P,
 	const float* D2D,
-	const glm::vec3* conic,
+	const glm::vec2* scales,
+	const float* rots,
+	const float* negatives,
 	const float* opacities,
 	const float* colors,
 	const int W, int H,
 	int* radii,
+	float* cov2Ds,
 	float2* points_xy_image,
 	float4* conic_opacity,
 	const dim3 grid,
@@ -39,6 +61,10 @@ __global__ void preprocessCUDA(int P,
 	// this Gaussian will not be processed further.
 	radii[idx] = 0;
 	tiles_touched[idx] = 0;
+
+	const float* conic;
+	computeCov2D(scales[idx], rots[idx], cov2Ds + idx * 3);
+	conic = cov2Ds + idx * 3;
 
 	const float det_conic = conic[idx].x * conic[idx].z - conic[idx].y * conic[idx].y;
 	if (det_conic == 0.0f)
@@ -56,7 +82,7 @@ __global__ void preprocessCUDA(int P,
 	// Compute extent in screen space (by finding eigenvalues of
 	// 2D covariance matrix). Use extent to compute a bounding rectangle
 	// of screen-space tiles that this Gaussian overlaps with. Quit if
-	// rectangle covers 0 tiles. 
+	// rectangle covers 0 tiles.
 	float mid = 0.5f * (cov.x + cov.z);
 	float lambda1 = mid + sqrt(max(0.1f, mid * mid - det));
 	float lambda2 = mid - sqrt(max(0.1f, mid * mid - det));
@@ -82,7 +108,7 @@ __global__ void preprocessCUDA(int P,
 }
 
 // Main rasterization method. Collaboratively works on one tile per
-// block, each thread treats one pixel. Alternates between fetching 
+// block, each thread treats one pixel. Alternates between fetching
 // and rasterizing data.
 template <uint32_t CHANNELS>
 __global__ void __launch_bounds__(BLOCK_X * BLOCK_Y)
@@ -154,7 +180,7 @@ renderCUDA(
 			// Keep track of current position in range
 			contributor++;
 
-			// Resample using conic matrix (cf. "Surface 
+			// Resample using conic matrix (cf. "Surface
 			// Splatting" by Zwicker et al., 2001)
 			float2 xy = collected_xy[j];
 			float2 d = { xy.x - pixf.x, xy.y - pixf.y };
@@ -166,7 +192,7 @@ renderCUDA(
 			// Eq. (2) from 3D Gaussian splatting paper.
 			// Obtain alpha by multiplying with Gaussian opacity
 			// and its exponential falloff from mean.
-			// Avoid numerical instabilities (see paper appendix). 
+			// Avoid numerical instabilities (see paper appendix).
 			float alpha = min(0.99f, con_o.w * exp(power));
 			if (alpha < 1.0f / 255.0f)
 				continue;
@@ -192,7 +218,7 @@ renderCUDA(
 		final_T[pix_id] = T;
 		n_contrib[pix_id] = last_contributor;
 		for (int ch = 0; ch < CHANNELS; ch++)
-			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
+			out_color[ch * H * W + pix_id] = C[ch];
 
 	}
 }
@@ -224,11 +250,14 @@ void FORWARD::render(
 }
 
 void FORWARD::preprocess(int P, const float* D2D,
-	const glm::vec3* conic,
+	const glm::vec2* scales,
+	const float* rots,
+	const float* negatives,
 	const float* opacities,
 	const float* colors,
 	const int W, int H,
 	int* radii,
+	float* cov2Ds,
 	float2* means2D,
 	float4* conic_opacity,
 	const dim3 grid,
@@ -238,11 +267,14 @@ void FORWARD::preprocess(int P, const float* D2D,
 {
 	preprocessCUDA<NUM_CHANNELS> << <(P + 255) / 256, 256 >> > (
 		P,D2D,
-		conic,
+		scales,
+		rots,
+		negatives,
 		opacities,
 		colors,
 		W, H,
 		radii,
+		cov2Ds,
 		means2D,
 		conic_opacity,
 		grid,
