@@ -28,6 +28,23 @@ def psnr(img1, img2):
     mse = (((img1 - img2)) ** 2).view(img1.shape[0], -1).mean(1, keepdim=True)
     return 20 * torch.log10(1.0 / torch.sqrt(mse))
 
+def write_exr_image(path, img : torch.Tensor):
+     # 你可以将这些数据保存为exr文件以供查看：
+    _, H, W = img.shape
+    lightmap = img.permute(1, 2, 0).float().cpu().numpy()
+
+    print(img.shape)
+    R = lightmap[:, :, 0].tobytes()
+    G = lightmap[:, :, 1].tobytes()
+    B = lightmap[:, :, 2].tobytes()
+
+    print("R max:", lightmap[:, :, 0].max())
+
+    exr_file = OpenEXR.OutputFile(os.path.join(path, "img.exr"),
+                                  OpenEXR.Header(W, H))
+    exr_file.writePixels({'R': R, 'G': G, 'B': B})
+    exr_file.close()
+
 def read_image_from_data(dataset_path='E:\\tx contest\\HPRC_Test1\\Data\\Data_HPRC', time=0, config_file='config.json'):
     with open(os.path.join(dataset_path, config_file), 'r', encoding='utf-8') as f:
         data = json.load(f)
