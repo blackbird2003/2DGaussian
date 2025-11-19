@@ -22,4 +22,4 @@ wheels/
 .installed.cfg
 *.egg
 *.exr
-.pyc
+*.pyc
