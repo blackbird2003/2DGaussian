@@ -64,7 +64,7 @@ class Model:
         self._negative = torch.empty(0)
 
     def construct_list_of_attributes(self):
-        l = ['x', 'y', 'z', 'nx', 'ny', 'nz', 'r', 'g', 'b']
+        l = ['x', 'y', 'r', 'g', 'b']
 
         l.append('opacity')
         for i in range(self._scaling.shape[1]):
@@ -80,9 +80,8 @@ class Model:
     def save(self, path):
         mkdir_p(os.path.dirname(path))
 
-        xyz = self._xyz.detach()
-        xyz = torch.cat([xyz, torch.zeros(xyz.shape[0], 1, device="cuda")], dim=1).cpu().numpy()
-        normal = np.zeros_like(xyz)
+        xyz = self._xyz.detach().cpu().numpy()
+        # xyz = torch.cat([xyz, torch.zeros(xyz.shape[0], 1, device="cuda")], dim=1).cpu().numpy()
         color = self._rgb.detach().cpu().numpy()
         opacities = self._opacity.detach().cpu().numpy()
         scale = self._scaling.detach().cpu().numpy()
@@ -92,7 +91,7 @@ class Model:
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
 
         elements = np.empty(xyz.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((xyz, normal, color, opacities, scale, rotation, negative), axis=1)
+        attributes = np.concatenate((xyz, color, opacities, scale, rotation, negative), axis=1)
         elements[:] = list(map(tuple, attributes))
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
@@ -102,6 +101,9 @@ class Model:
 
         xyz = np.stack((np.asarray(plydata.elements[0]["x"]),
                         np.asarray(plydata.elements[0]["y"])),  axis=1)
+        rgb = np.stack((np.asarray(plydata.elements[0]["r"]),
+                        np.asarray(plydata.elements[0]["g"]),
+                        np.asarray(plydata.elements[0]["b"])), axis=1)
         opacities = np.asarray(plydata.elements[0]["opacity"])[..., np.newaxis]
 
         scale_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("scale_")]
@@ -117,10 +119,10 @@ class Model:
             rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
 
         self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device="cuda").requires_grad_(True))
+        self._rgb = nn.Parameter(torch.tensor(rgb, dtype=torch.float, device="cuda").requires_grad_(True))
         self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device="cuda").requires_grad_(True))
         self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
         self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
-
 
         negatives = np.asarray(plydata.elements[0]["negative"])[..., np.newaxis]
         self._negative = nn.Parameter(torch.tensor(negatives, dtype=torch.float, device="cuda").requires_grad_(False))
@@ -159,22 +161,16 @@ class Model:
     def create_from_samlpe_points(self, sample_xy : torch.Tensor, rgb : torch.Tensor, spatial_lr_scale):
         # 过滤掉rgb全为0的点
         mask = rgb.sum(dim=1) > 0.00
-        print("rgb shape", rgb.shape)
         rgb = rgb[mask]
 
-        print("mask shape:", mask.shape)
-        print("sample_xy shape:", sample_xy.shape)
-
         sample_xy = sample_xy[mask]
-
-        print("Number of points after filtering:", rgb.shape[0])
 
         self.spatial_lr_scale = spatial_lr_scale
 
         scales = torch.ones((sample_xy.shape[0], 2)).float().cuda()
         rots = torch.zeros((sample_xy.shape[0], 1), device="cuda").float().cuda()
 
-        opacities = self.inverse_opacity_activation(0.1 * torch.ones((sample_xy.shape[0], 1), dtype=torch.float, device="cuda"))
+        opacities = self.inverse_opacity_activation(0.5 * torch.ones((sample_xy.shape[0], 1), dtype=torch.float, device="cuda"))
         negatives = torch.full_like(opacities, 1.0).float().cuda()
 
         self._xyz = nn.Parameter(sample_xy.float().cuda().requires_grad_(True))
@@ -258,7 +254,8 @@ class Model:
         print("rgb", new_color.shape)
         print("opa:", new_opacities.shape)
         print("sca", new_scaling.shape)
-        print("")
+        print("rot", new_rotation.shape)
+        print("nega", new_negative.shape)
 
         optimizable_tensors = self.cat_tensors_to_optimizer(d, indices)
 
@@ -396,24 +393,24 @@ class Model:
         print(f"probs min: {probs.min()}, max: {probs.max()}")
         print(f"probs sum: {probs.sum()}")
 
-    # 检查 NaN 和 Inf
-        if torch.isnan(probs).any():
-            print("❌ NaN values found in probs!")
-        probs = torch.nan_to_num(probs, nan=0.0)
+    # # 检查 NaN 和 Inf
+    #     if torch.isnan(probs).any():
+    #         print("❌ NaN values found in probs!")
+    #         probs = torch.nan_to_num(probs, nan=0.0)
 
-        if torch.isinf(probs).any():
-            print("❌ Inf values found in probs!")
-            probs = torch.nan_to_num(probs, posinf=1.0, neginf=0.0)
+    #     if torch.isinf(probs).any():
+    #         print("❌ Inf values found in probs!")
+    #         probs = torch.nan_to_num(probs, posinf=1.0, neginf=0.0)
 
-    # 确保所有值非负
-        if (probs < 0).any():
-            print("❌ Negative values found in probs!")
-            probs = torch.clamp(probs, min=0.0)
+    # # 确保所有值非负
+    #     if (probs < 0).any():
+    #         print("❌ Negative values found in probs!")
+    #         probs = torch.clamp(probs, min=0.0)
 
-    # 检查是否所有概率都为0
-        if (probs.sum() == 0).all():
-            print("⚠️ All probabilities are zero, using uniform distribution")
-            probs = torch.ones_like(probs) / probs.size(0)
+    # # 检查是否所有概率都为0
+    #     if (probs.sum() == 0).all():
+    #         print("⚠️ All probabilities are zero, using uniform distribution")
+    #         probs = torch.ones_like(probs) / probs.size(0)
 
 
         probs = probs.abs() / (probs.abs().sum() + torch.finfo(torch.float32).eps)
@@ -467,7 +464,9 @@ class Model:
         if num_gs <= 0:
             return 0
 
+        print("opa", self.get_opacity)
         probs = self.get_opacity.squeeze(-1)
+        print("probs", probs)
         add_idx, ratio = self._sample_alives(probs=probs, num=num_gs)
 
         (
@@ -479,9 +478,9 @@ class Model:
             new_negative,
         ) = self._update_params(add_idx, ratio=ratio)
 
-        print(self._opacity.shape)
-        print(add_idx.shape)
-        print(new_opacity.shape)
+        # print(self._opacity.shape)
+        # print(add_idx.shape)
+        # print(new_opacity.shape)
         self._opacity[add_idx] = new_opacity
         self._scaling[add_idx] = new_scaling
 
@@ -491,7 +490,7 @@ class Model:
         # print("new_rotation shape:", new_rotation.shape)
         # print("new_negative shape:", new_negative.shape)
 
-        self.densification_postfix(new_xyz, new_opacity, new_scaling, new_rotation, new_negative, add_idx, new_rgb, reset_params=False)
+        self.densification_postfix(new_xyz, new_opacity, new_scaling, new_rotation, new_negative, new_rgb, add_idx, reset_params=False)
         self.replace_tensors_to_optimizer(inds=add_idx)
 
         return num_gs

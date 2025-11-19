@@ -30,16 +30,11 @@ class Scene:
                 self.loaded_iter = load_iteration
             print("Loading trained model at iteration {}".format(self.loaded_iter))
 
-        sample_xy = get_sample_init_xy(n_points=2048).cuda() # N, 2  [0, 1]
 
-        # print("sample_xy:", sample_xy)
-
-        # TODO:
-        # 1. read image
-        # 2. sample initial points
-        rgb = get_image_color(self.images, sample_xy).cuda() # N, 3
 
         if render is False:
+            sample_xy = get_sample_init_xy(n_points=2048).cuda() # N, 2  [0, 1]
+            rgb = get_image_color(self.images, sample_xy).cuda() # N, 3
             self.primitives.create_from_samlpe_points(sample_xy, rgb, spatial_lr_scale=1.0)
         else:
             self.primitives.load_ply(os.path.join(self.model_path,

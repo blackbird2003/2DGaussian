@@ -56,10 +56,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if iteration % 1000 == 0:
             torch.cuda.empty_cache()
 
-        # render_pkg = render(primitives, opt, background, resoulation)
+        if iteration % 10 == 0:
+            print("cur opa max:", primitives.get_opacity.max())
 
-        # image = render_pkg["render"]
-        image = torch.ones_like(gt_image)
+        render_pkg = render(primitives, opt, background, resoulation)
+
+        image = render_pkg["render"]
+        print("image max", image.max())
+        # image = torch.ones_like(gt_image)
         # print(image)
         # torchvision.utils.save_image(image, os.path.join(args.model_path, 'test' + ".png"))
 
@@ -105,7 +109,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), dataset)
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.update_opacity(opt.dropout)
+                # scene.update_opacity(opt.dropout)
                 scene.save(iteration)
 
             if iteration < opt.densify_until_iter and iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
@@ -114,7 +118,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                 dead_mask =  torch.logical_and(dead_mask, dead_mask2)
 
                 primitives.recycle_components(dead_mask=dead_mask)
-                add_num = primitives.add_components(cap_max=4096)
+                add_num = primitives.add_components(cap_max=16384)
 
                 print("add num:", add_num)
 
@@ -230,7 +234,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[100, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[10, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
