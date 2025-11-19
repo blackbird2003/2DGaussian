@@ -1,6 +1,9 @@
 .vscode/settings.json
 submodules/picturegs/picturegs.egg-info
 submodules/picturegs/build
+**/__pycache__/
+
+output/
 __pycache__/
 *.py[cod]
 *$py.class

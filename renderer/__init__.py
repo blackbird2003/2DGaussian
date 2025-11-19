@@ -7,7 +7,6 @@ from utils.general_utils import build_scaling_rotation
 
 def render(pc : Model, opt : OptimizationParams, background, resoulation):
     H, W = resoulation
-    render_img = torch.zeros((resoulation[1], resoulation[0], 3))  # W, H, 3
 
     raster_settings = GaussianRasterizationSettings(
         H, W,
