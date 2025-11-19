@@ -109,7 +109,8 @@ class _RasterizeGaussians(torch.autograd.Function):
             grad_opacities,
             grad_scales,
             grad_rots,
-            grad_negative
+            grad_negative,
+            None
         )
 
         return grads

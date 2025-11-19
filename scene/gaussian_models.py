@@ -254,6 +254,12 @@ class Model:
         "rotation" : new_rotation,
         "negative": new_negative}
 
+        print("xyz", new_xyz.shape)
+        print("rgb", new_color.shape)
+        print("opa:", new_opacities.shape)
+        print("sca", new_scaling.shape)
+        print("")
+
         optimizable_tensors = self.cat_tensors_to_optimizer(d, indices)
 
         self._xyz = optimizable_tensors["xyz"]
@@ -361,16 +367,21 @@ class Model:
         #     scale_old=self.get_scaling[idxs],
         #     N=ratio[idxs, 0] + 1
         # )
-        new_opacity, new_scaling = self.get_opacity[idxs, 0] * self.get_negative[idxs, 0],
-        new_scaling = self.get_scaling[idxs],
+
+
+        new_opacity = self.get_opacity[idxs] * self.get_negative[idxs]
+
+        new_scaling = self.get_scaling[idxs]
 
         new_opacity = torch.clamp(new_opacity.unsqueeze(-1), max = 1.0 - torch.finfo(torch.float32).eps, min = -1.0 + torch.finfo(torch.float32).eps)
-        new_opacity = torch.where((new_opacity >= 0) & (new_opacity < 0.005), 0.005, new_opacity)
-        new_opacity = torch.where((new_opacity < 0) & (new_opacity > -0.005), -0.005, new_opacity)
-        new_opacity = new_opacity / self.get_negative[idxs]
 
+        new_opacity = torch.where((new_opacity >= 0) & (new_opacity < 0.005), 0.005, new_opacity)
+
+        new_opacity = torch.where((new_opacity < 0) & (new_opacity > -0.005), -0.005, new_opacity).squeeze(-1)
+
+        new_opacity = new_opacity / self.get_negative[idxs]
         new_opacity = self.inverse_opacity_activation(new_opacity)
-        new_scaling = self.scaling_inverse_activation(new_scaling.reshape(-1, 3)[:, :2])
+        new_scaling = self.scaling_inverse_activation(new_scaling.reshape(-1, 2))
 
         # print("xyz device", self._xyz.device)
         # print("rotation device", self._rotation.device)
@@ -456,9 +467,7 @@ class Model:
         if num_gs <= 0:
             return 0
 
-        print("opa:", self.get_opacity)
         probs = self.get_opacity.squeeze(-1)
-        print("probs:", probs)
         add_idx, ratio = self._sample_alives(probs=probs, num=num_gs)
 
         (
@@ -470,6 +479,9 @@ class Model:
             new_negative,
         ) = self._update_params(add_idx, ratio=ratio)
 
+        print(self._opacity.shape)
+        print(add_idx.shape)
+        print(new_opacity.shape)
         self._opacity[add_idx] = new_opacity
         self._scaling[add_idx] = new_scaling
 

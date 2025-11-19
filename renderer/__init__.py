@@ -25,8 +25,9 @@ def render(pc : Model, opt : OptimizationParams, background, resoulation):
 
     scale = pc.get_scaling
     rot = pc.get_rotation
+    nega = pc.get_negative
 
-    cov_inv = pc.get_cov_inv()
+    # cov_inv = pc.get_cov_inv()
 
     # print("xy shape:", means2D.shape)
     # print("color shape::", rgb.shape)
@@ -37,7 +38,9 @@ def render(pc : Model, opt : OptimizationParams, background, resoulation):
         means2D=means2D,
         colors=rgb,
         opacities=opacity,
-        conic=cov_inv
+        scale=scale,
+        rots=rot,
+        negative=nega
     )
 
     # print(render_img.device)
