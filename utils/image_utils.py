@@ -19,6 +19,7 @@ import Imath
 from scene.image_source import Image_source
 from matplotlib import pyplot as plt
 import torch.nn.functional as F
+import cv2
 
 
 def mse(img1, img2):
@@ -196,3 +197,37 @@ def plot_tensor_image(image_tensor):
     plt.axis('off')
     plt.title(f"Image from Tensor")
     plt.show()
+
+
+def exr_to_png_opencv(exr_tensor, output_path=None):
+    """
+    将EXR tensor转换为PNG格式
+
+    Args:
+        exr_tensor: shape (H, W, 3) 的tensor
+        output_path: 保存路径，如果为None则返回numpy数组
+
+    Returns:
+        PNG格式的numpy数组或保存文件
+    """
+    # 转换为numpy数组
+    print("image shape:", exr_tensor.shape)
+    if isinstance(exr_tensor, torch.Tensor):
+        exr_array = exr_tensor.permute(1, 2, 0).cpu().numpy()
+    else:
+        exr_array = exr_tensor
+
+    # 方法A: 简单的线性映射（适合范围在0-1之间的数据）
+    png_array = np.clip(exr_array * 255, 0, 255).astype(np.uint8)
+
+    # 方法B: 使用Reinhard色调映射（适合HDR数据）
+    # png_array = reinhard_tonemap(exr_array)
+
+    if output_path:
+        # 注意：OpenCV使用BGR格式，需要转换
+        print("save path: ", output_path)
+        png_bgr = cv2.cvtColor(png_array, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(os.path.join(output_path, "image.png"), png_bgr)
+        print(f"PNG图像已保存到: {output_path}")
+    else:
+        return png_array

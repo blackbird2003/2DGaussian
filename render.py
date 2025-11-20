@@ -10,7 +10,8 @@ from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from scene.gaussian_models import Model
 from utils.loss_utils import normalize
-from utils.image_utils import write_exr_image
+from utils.image_utils import write_exr_image, exr_to_png_opencv
+from utils.system_utils import searchForAllIteration
 
 def render_set(model_path, iteration, primitives, pipeline, gt_image):
     render_path = os.path.join(model_path, "ours_{}".format(iteration), "renders")
@@ -27,6 +28,7 @@ def render_set(model_path, iteration, primitives, pipeline, gt_image):
 
     write_exr_image(render_path, rendering)
     write_exr_image(gts_path, gt_image)
+    exr_to_png_opencv(rendering, render_path)
 
 def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
     with torch.no_grad():
@@ -51,4 +53,11 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+    if args.iteration != -1:
+        render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+    else:
+        model_path = os.path.join(args.model_path, "point_cloud")
+        save_iterations = searchForAllIteration(model_path)
+        for iter in save_iterations:
+            print("render ours_{}", iter)
+            render_sets(model.extract(args), iter, pipeline.extract(args), args.skip_train, args.skip_test)
