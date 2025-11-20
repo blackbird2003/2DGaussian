@@ -46,8 +46,17 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
     first_iter += 1
 
     gt_image = scene.getImages().cuda()
+
+    offset = 10.
+    gt_image = offset * gt_image
+
     resoulation = (gt_image.shape[1], gt_image.shape[2])
     # image = torch.ones_like(gt_image)
+    print("xyz: ", primitives.get_xyz)
+    print("rgb:", primitives.get_rgb)
+    print("opa:", primitives.get_opacity)
+    print("scale:", primitives.get_scaling)
+    print("rot:", primitives.get_rotation)
 
     for iteration in range(first_iter, opt.iterations + 1):
         iter_start.record()
@@ -56,16 +65,21 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         if iteration % 1000 == 0:
             torch.cuda.empty_cache()
 
-        if iteration % 10 == 0:
-            print("cur opa max:", primitives.get_opacity.max())
-
         render_pkg = render(primitives, opt, background, resoulation)
 
         image = render_pkg["render"]
-        # print("image max", image.max())
-        # image = torch.ones_like(gt_image)
-        # print(image)
-        # torchvision.utils.save_image(image, os.path.join(args.model_path, 'test' + ".png"))
+
+        if iteration % 10 == 0:
+            # print(" cur opa max:", primitives.get_opacity.max())
+            # print(" point color max:", primitives.get_rgb.max())
+            # print(" color max:", image.max())
+            # print("scale:", primitives.get_scaling.max())
+            print("xyz: ", primitives._xyz.max())
+            print("rgb:", primitives._rgb.max())
+            print("opa:", primitives._opacity.max())
+            print("scale:", primitives._scaling.max())
+            print("rot:", primitives._rotation.max())
+
 
         Ll1 = l1_loss(image, gt_image)
 
@@ -75,6 +89,14 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss = loss + args.scale_reg * torch.abs(primitives.get_scaling).mean()
 
         loss.backward()
+
+        if iteration % 10 == 0:
+            print("xyz grad:", primitives._xyz.grad)
+            print("opa grad:", primitives._opacity.grad)
+            print("rgb grad:", primitives._rgb.grad)
+            print("sca grad:", primitives._scaling.grad)
+            print("rot grad:", primitives._rotation.grad)
+            print("neg grad:", primitives._negative.grad)
 
         iter_end.record()
 
@@ -107,7 +129,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             # Log and save
             training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background), dataset)
-            if (iteration in saving_iterations):
+            if (iteration in saving_iterations or iteration == opt.iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 # scene.update_opacity(opt.dropout)
                 scene.save(iteration)
@@ -234,7 +256,7 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1000, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[1, 10, 100, 1000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
